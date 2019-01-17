@@ -1,0 +1,3 @@
+[submodule "external/composer"]
+	path = external/composer
+	url = https://github.com/synesthesia-project/composer.git
