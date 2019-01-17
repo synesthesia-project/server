@@ -31,7 +31,12 @@ export class Server {
                     const composerPath = request.url.substr(COMPOSER_URL.length);
                     if (composerPath === '/') {
                         response.writeHead(200, { 'Content-Type': 'text/html' });
-                        response.end(composer.getIndexHtml(), 'utf-8');
+                        response.end(
+                            composer.getIndexHtml({
+                                name: 'Synesthesia Server',
+                                websocketURL: `ws://localhost:${this.port}${COMPOSER_URL}`
+                            }),
+                            'utf-8');
                         return;
                     }
                     for (const file of composer.STATIC_FILES) {
