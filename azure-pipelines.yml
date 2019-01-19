@@ -11,7 +11,7 @@ steps:
   displayName: 'Install Node.js'
 
 - script: |
-    git submodule update --init
+    git submodule update --init --recursive
   displayName: 'setup git submodules'
 
 - script: |
