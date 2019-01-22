@@ -3,12 +3,20 @@ import * as http from 'http';
 import * as WebSocket from 'ws';
 import { ServerEndpoint } from '@synesthesia-project/core/protocols/control';
 import { PlayStateData } from '@synesthesia-project/core/protocols/control/messages';
+import { CONTROLLER_WEBSOCKET_PATH } from '@synesthesia-project/core/constants';
 
 import * as composer from '@synesthesia-project/composer';
+
+import {ComposerConnection} from './connections/composer';
+import {ControllerConnection} from './connections/controller';
+
+import {ServerState} from './state/state';
 
 const COMPOSER_URL = '/composer';
 
 export class Server {
+
+    private readonly state = new ServerState();
 
     private readonly port: number;
     private readonly server: http.Server;
@@ -84,18 +92,21 @@ export class Server {
         });
     }
 
-    private newPlayState(state: PlayStateData) {
-        console.log('new play state:', state);
-    }
-
     private handleConnection(ws: WebSocket) {
-        console.log('new connection');
-        const endpoint = new ServerEndpoint(
-            msg => ws.send(JSON.stringify(msg)),
-            state => this.newPlayState(state)
-            );
-        ws.on('message', msg => endpoint.recvMessage(JSON.parse(msg)));
-        ws.on('close', () => endpoint.closed());
+        const url = ws.url || ws.upgradeReq.url;
+        console.log('new connection', url);
+
+        if (url === COMPOSER_URL) {
+            // Initiate a new connection to composer
+            this.state.addComposer(new ComposerConnection(ws));
+            return;
+        }
+
+        if (url === CONTROLLER_WEBSOCKET_PATH) {
+            // Initiate a new connection to composer
+            this.state.addController(new ControllerConnection(ws));
+            return;
+        }
     }
 
 }
