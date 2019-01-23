@@ -1,13 +1,15 @@
 import * as WebSocket from 'ws';
 
-import { Endpoint } from '@synesthesia-project/core/protocols/util/endpoint';
+import { RequestHandlerEndpoint } from '@synesthesia-project/core/protocols/util/endpoint';
 
-import { Notification, PlayStateData } from '@synesthesia-project/composer/dist/integration/shared';
+import { Request, Response, Notification, PlayStateData } from '@synesthesia-project/composer/dist/integration/shared';
+
+type RequestHandler = (request: Request) => Promise<Response>;
 
 /**
  * Server side of the connection to the composer
  */
-export class ComposerConnection extends Endpoint<never, never, Notification> {
+export class ComposerConnection extends RequestHandlerEndpoint<Request, Response, Notification> {
 
   public constructor(ws: WebSocket) {
       super(msg => ws.send(JSON.stringify(msg)));
@@ -16,28 +18,20 @@ export class ComposerConnection extends Endpoint<never, never, Notification> {
       ws.on('close', () => this.closed());
   }
 
-  protected handleRequest(request: never): Promise<never> {
-      return new Promise((resolve, reject) => {
-          reject(new Error('unknown request type'));
-      });
-  }
-
   protected handleNotification(notification: Notification) {
-      console.error('got notification:', notification);
-      switch (notification.type) {
-      }
-      console.error('unknown notification:', notification);
+    console.error('got notification:', notification);
+    switch (notification.type) {
+    }
+    console.error('unknown notification:', notification);
   }
 
   protected handleClosed() {
-      console.log('connection closed');
+    console.log('connection closed');
   }
 
   public sendPlayState(data: PlayStateData) {
-    console.log('sendPlayState', data);
     this.sendNotification({
-      type: 'state',
-      data
+      type: 'state', data
     });
   }
 

@@ -1,6 +1,6 @@
 
 import { PlayStateData as ControllerPlayStateData } from '@synesthesia-project/core/protocols/control/messages';
-import { Notification, PlayStateData as ComposerPlayStateData } from '@synesthesia-project/composer/dist/integration/shared';
+import * as composerProtocol from '@synesthesia-project/composer/dist/integration/shared';
 
 import { ComposerConnection } from '../connections/composer';
 import { ControllerConnection } from '../connections/controller';
@@ -19,12 +19,17 @@ export class ServerState {
   private readonly composers = new Set<ComposerConnection>();
   private readonly controllers = new Set<ControllerState>();
 
+  public constructor() {
+    this.handleComposerRequest = this.handleComposerRequest.bind(this);
+  }
+
   public addComposer(composer: ComposerConnection) {
     this.composers.add(composer);
-    // TODO: add listeners
     const playState = this.calculateComposerState();
     if (playState)
-      composer.sendPlayState(playState);
+      composer.sendPlayState(playState.state);
+    composer.setRequestHandler(this.handleComposerRequest);
+    // TODO: add listeners (handle when closed especially)
   }
 
   public addController(controller: ControllerConnection) {
@@ -34,7 +39,7 @@ export class ServerState {
       lastUpdated: new Date().getTime()
     };
     this.controllers.add(controllerState);
-    // TODO: add listeners
+    // TODO: add listeners (handle when closed especially)
     controller.addListener({
       closed: () => this.controllers.delete(controllerState),
       playStateUpdated: state => {
@@ -45,27 +50,43 @@ export class ServerState {
     });
   }
 
+  private handleComposerRequest(request: composerProtocol.Request): Promise<composerProtocol.Response> {
+    const playState = this.calculateComposerState();
+    if (!playState) {
+      console.log ('no active controllers');
+      return Promise.resolve({success: false});
+    }
+    console.log ('passing on request to controller', request);
+    switch (request.request) {
+      case 'toggle':
+      case 'pause':
+      case 'go-to-time':
+        console.log(playState.controller.controller.sendRequest, playState.controller.controller.sendRequest, request);
+        return playState.controller.controller.sendRequest(request);
+    }
+  }
+
   private sendStateToComposers() {
     const playState = this.calculateComposerState();
     console.log(`playState:`, playState);
     if (playState) {
       console.log(`sending state to ${this.composers.size} composers`, playState);
-      this.composers.forEach(composer => composer.sendPlayState(playState));
+      this.composers.forEach(composer => composer.sendPlayState(playState.state));
     }
     // TODO: handle no play state (i.e. no controller or no layers)
   }
 
-  private calculateComposerState(): ComposerPlayStateData | null {
+  private calculateComposerState() {
 
-    const playingLayers: {state: ComposerPlayStateData, controller: ControllerState}[] = [];
-    const pausedLayers: {state: ComposerPlayStateData, controller: ControllerState}[] = [];
+    const playingLayers: {state: composerProtocol.PlayStateData, controller: ControllerState}[] = [];
+    const pausedLayers: {state: composerProtocol.PlayStateData, controller: ControllerState}[] = [];
 
     for (const controller of this.controllers.values()) {
       if (controller.state) {
         console.log(controller.state);
         for (const layer of controller.state.layers) {
           if (layer.file.type === 'meta') {
-            const state: ComposerPlayStateData = {
+            const state: composerProtocol.PlayStateData = {
               durationMillis: layer.file.lengthMillis,
               meta: {
                 info: {
@@ -86,12 +107,12 @@ export class ServerState {
     // If we have a playing state, pick that (most recently updated first)
     playingLayers.sort((a, b) => a.controller.lastUpdated - b.controller.lastUpdated);
     for (const layer of playingLayers)
-      return layer.state;
+      return layer;
 
     // Next, ifIf we have a paused state, pick that (most recently updated first)
-    pausedLayers.sort((a, b) => a.controller.lastUpdated - b.controller.lastUpdated)
+    pausedLayers.sort((a, b) => a.controller.lastUpdated - b.controller.lastUpdated);
     for (const layer of pausedLayers)
-      return layer.state;
+      return layer;
 
     return null;
   }
