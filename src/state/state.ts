@@ -19,10 +19,12 @@ export class ServerState {
   private readonly composers = new Set<ComposerConnection>();
   private readonly controllers = new Set<ControllerState>();
 
-  public addComposer(composers: ComposerConnection) {
-    this.composers.add(composers);
+  public addComposer(composer: ComposerConnection) {
+    this.composers.add(composer);
     // TODO: add listeners
-    // consumer.
+    const playState = this.calculateComposerState();
+    if (playState)
+      composer.sendPlayState(playState);
   }
 
   public addController(controller: ControllerConnection) {
