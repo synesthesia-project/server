@@ -45,41 +45,53 @@ export class ServerState {
 
   private sendStateToComposers() {
     const playState = this.calculateComposerState();
-    console.log(`sending state to ${this.composers.size} composers`, playState);
+    console.log(`playState:`, playState);
     if (playState) {
+      console.log(`sending state to ${this.composers.size} composers`, playState);
       this.composers.forEach(composer => composer.sendPlayState(playState));
     }
-    // TODO: handle no play state (i.e. no composer or no layers)
+    // TODO: handle no play state (i.e. no controller or no layers)
   }
 
   private calculateComposerState(): ComposerPlayStateData | null {
-    // TODO: more intelligently pick a controller + layer to use
-    let playState: ComposerPlayStateData | null = null;
-    this.controllers.forEach(controllerState => {
-      // Just set it to a layer!
-      if (controllerState.state && controllerState.state.layers.length > 0) {
-        for (const layer of controllerState.state.layers) {
+
+    const playingLayers: {state: ComposerPlayStateData, controller: ControllerState}[] = [];
+    const pausedLayers: {state: ComposerPlayStateData, controller: ControllerState}[] = [];
+
+    for (const controller of this.controllers.values()) {
+      if (controller.state) {
+        console.log(controller.state);
+        for (const layer of controller.state.layers) {
           if (layer.file.type === 'meta') {
-            playState = {
+            const state: ComposerPlayStateData = {
               durationMillis: layer.file.lengthMillis,
               meta: {
-                // TODO implement ID
-                id: '1'
+                info: {
+                  title: layer.file.title,
+                  artist: layer.file.artist
+                }
               },
-              state: {
-                state: 'playing',
-                effectiveStartTimeMillis: layer.effectiveStartTimeMillis,
-                playSpeed: layer.playSpeed
-              }
+              state: layer.state
             };
+            (layer.state.type === 'playing' ? playingLayers : pausedLayers).push({state, controller});
           } else {
             console.error('file based not supported yet');
           }
         }
-        const s = controllerState.state.layers[0];
       }
-    });
-    return playState;
+    }
+
+    // If we have a playing state, pick that (most recently updated first)
+    playingLayers.sort((a, b) => a.controller.lastUpdated - b.controller.lastUpdated);
+    for (const layer of playingLayers)
+      return layer.state;
+
+    // Next, ifIf we have a paused state, pick that (most recently updated first)
+    pausedLayers.sort((a, b) => a.controller.lastUpdated - b.controller.lastUpdated)
+    for (const layer of pausedLayers)
+      return layer.state;
+
+    return null;
   }
 
 

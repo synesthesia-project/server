@@ -14,24 +14,6 @@ export class ComposerConnection extends Endpoint<never, never, Notification> {
 
       ws.on('message', msg => this.recvMessage(JSON.parse(msg)));
       ws.on('close', () => this.closed());
-
-      this.sendNotification({
-        type: 'state',
-        data: {
-          durationMillis: 10000,
-          meta: {
-            id: '1',
-            info: {
-              title: 'foo',
-              artist: 'bar'
-            }
-          },
-          state: {
-            state: 'paused',
-            timeMillis: 10
-          }
-        }
-      });
   }
 
   protected handleRequest(request: never): Promise<never> {

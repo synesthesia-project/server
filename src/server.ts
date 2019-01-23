@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as WebSocket from 'ws';
 import { ServerEndpoint } from '@synesthesia-project/core/protocols/control';
 import { PlayStateData } from '@synesthesia-project/core/protocols/control/messages';
-import { CONTROLLER_WEBSOCKET_PATH } from '@synesthesia-project/core/constants';
+import { CONTROLLER_WEBSOCKET_PATH, COMPOSER_PATH } from '@synesthesia-project/core/constants';
 
 import * as composer from '@synesthesia-project/composer';
 
@@ -11,8 +11,6 @@ import {ComposerConnection} from './connections/composer';
 import {ControllerConnection} from './connections/controller';
 
 import {ServerState} from './state/state';
-
-const COMPOSER_URL = '/composer';
 
 export class Server {
 
@@ -30,19 +28,19 @@ export class Server {
         this.server = http.createServer((request, response) => {
 
             if (request.url) {
-                if (request.url === COMPOSER_URL) {
-                    response.writeHead(302, {Location: COMPOSER_URL + '/' });
+                if (request.url === COMPOSER_PATH) {
+                    response.writeHead(302, {Location: COMPOSER_PATH + '/' });
                     response.end('', 'utf-8');
                     return;
                 }
-                if (request.url.startsWith(COMPOSER_URL + '/')) {
-                    const composerPath = request.url.substr(COMPOSER_URL.length);
+                if (request.url.startsWith(COMPOSER_PATH + '/')) {
+                    const composerPath = request.url.substr(COMPOSER_PATH.length);
                     if (composerPath === '/') {
                         response.writeHead(200, { 'Content-Type': 'text/html' });
                         response.end(
                             composer.getIndexHtml({
                                 name: 'Synesthesia Server',
-                                websocketURL: `ws://localhost:${this.port}${COMPOSER_URL}`
+                                websocketURL: `ws://localhost:${this.port}${COMPOSER_PATH}`
                             }),
                             'utf-8');
                         return;
@@ -96,7 +94,7 @@ export class Server {
         const url = ws.url || ws.upgradeReq.url;
         console.log('new connection', url);
 
-        if (url === COMPOSER_URL) {
+        if (url === COMPOSER_PATH) {
             // Initiate a new connection to composer
             this.state.addComposer(new ComposerConnection(ws));
             return;
