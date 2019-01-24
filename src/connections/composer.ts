@@ -4,12 +4,12 @@ import { RequestHandlerEndpoint } from '@synesthesia-project/core/protocols/util
 
 import { Request, Response, Notification, PlayStateData } from '@synesthesia-project/composer/dist/integration/shared';
 
-type RequestHandler = (request: Request) => Promise<Response>;
-
 /**
  * Server side of the connection to the composer
  */
 export class ComposerConnection extends RequestHandlerEndpoint<Request, Response, Notification> {
+
+  private closeListeners = new Set<() => void>();
 
   public constructor(ws: WebSocket) {
       super(msg => ws.send(JSON.stringify(msg)));
@@ -19,20 +19,27 @@ export class ComposerConnection extends RequestHandlerEndpoint<Request, Response
   }
 
   protected handleNotification(notification: Notification) {
-    console.error('got notification:', notification);
     switch (notification.type) {
     }
     console.error('unknown notification:', notification);
   }
 
   protected handleClosed() {
-    console.log('connection closed');
+    this.closeListeners.forEach(l => l());
   }
 
   public sendPlayState(data: PlayStateData) {
     this.sendNotification({
       type: 'state', data
     });
+  }
+
+  public addListener(event: 'close', listener: () => void) {
+    this.closeListeners.add(listener);
+  }
+
+  public removeListener(event: 'close', listener: () => void) {
+    this.closeListeners.delete(listener);
   }
 
 }

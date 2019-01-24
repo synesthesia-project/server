@@ -29,7 +29,7 @@ export class ServerState {
     if (playState)
       composer.sendPlayState(playState.state);
     composer.setRequestHandler(this.handleComposerRequest);
-    // TODO: add listeners (handle when closed especially)
+    composer.addListener('close', () => this.composers.delete(composer));
   }
 
   public addController(controller: ControllerConnection) {
@@ -56,19 +56,17 @@ export class ServerState {
       console.log ('no active controllers');
       return Promise.resolve({success: false});
     }
-    console.log ('passing on request to controller', request);
     switch (request.request) {
       case 'toggle':
       case 'pause':
       case 'go-to-time':
-        console.log(playState.controller.controller.sendRequest, playState.controller.controller.sendRequest, request);
         return playState.controller.controller.sendRequest(request);
     }
   }
 
   private sendStateToComposers() {
     const playState = this.calculateComposerState();
-    console.log(`playState:`, playState);
+    console.log(`play State Updated`);
     if (playState) {
       console.log(`sending state to ${this.composers.size} composers`, playState);
       this.composers.forEach(composer => composer.sendPlayState(playState.state));
