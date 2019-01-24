@@ -21,6 +21,7 @@ export class ServerState {
 
   public constructor() {
     this.handleComposerRequest = this.handleComposerRequest.bind(this);
+    this.handleComposerNotification = this.handleComposerNotification.bind(this);
   }
 
   public addComposer(composer: ComposerConnection) {
@@ -30,6 +31,7 @@ export class ServerState {
       composer.sendPlayState(playState.state);
     composer.setRequestHandler(this.handleComposerRequest);
     composer.addListener('close', () => this.composers.delete(composer));
+    composer.addListener('notification', this.handleComposerNotification(composer));
   }
 
   public addController(controller: ControllerConnection) {
@@ -62,6 +64,22 @@ export class ServerState {
       case 'go-to-time':
         return playState.controller.controller.sendRequest(request);
     }
+  }
+
+  private handleComposerNotification(composer: ComposerConnection) {
+    return (notification: composerProtocol.Notification) => {
+      switch (notification.type) {
+        case 'cue-file-modified': {
+          // Send all other composers the new cue file
+          for (const c of this.composers) {
+            if (composer !== c)
+              c.sendNotification(notification);
+          }
+          break;
+        }
+      }
+      console.log('got notif', notification);
+    };
   }
 
   private sendStateToComposers() {

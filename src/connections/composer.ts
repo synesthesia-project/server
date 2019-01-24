@@ -10,6 +10,7 @@ import { Request, Response, Notification, PlayStateData } from '@synesthesia-pro
 export class ComposerConnection extends RequestHandlerEndpoint<Request, Response, Notification> {
 
   private closeListeners = new Set<() => void>();
+  private notificationListeners = new Set<(notif: Notification) => void>();
 
   public constructor(ws: WebSocket) {
       super(msg => ws.send(JSON.stringify(msg)));
@@ -19,9 +20,7 @@ export class ComposerConnection extends RequestHandlerEndpoint<Request, Response
   }
 
   protected handleNotification(notification: Notification) {
-    switch (notification.type) {
-    }
-    console.error('unknown notification:', notification);
+    this.notificationListeners.forEach(l => l(notification));
   }
 
   protected handleClosed() {
@@ -34,8 +33,18 @@ export class ComposerConnection extends RequestHandlerEndpoint<Request, Response
     });
   }
 
-  public addListener(event: 'close', listener: () => void) {
-    this.closeListeners.add(listener);
+  public addListener(event: 'close', listener: () => void): void;
+  public addListener(event: 'notification', listener: (notif: Notification) => void): void;
+
+  public addListener(event: 'close' | 'notification', listener: (() => void) | ((notif: Notification) => void)) {
+    switch (event) {
+      case 'close':
+        this.closeListeners.add(listener as (() => void));
+        break;
+      case 'notification':
+        this.notificationListeners.add(listener);
+        break;
+    }
   }
 
   public removeListener(event: 'close', listener: () => void) {
