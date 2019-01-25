@@ -1,9 +1,13 @@
 
-import { PlayStateData as ControllerPlayStateData } from '@synesthesia-project/core/protocols/control/messages';
+import { PlayStateData as ControllerPlayStateData, Layer } from '@synesthesia-project/core/protocols/control/messages';
 import * as composerProtocol from '@synesthesia-project/composer/dist/integration/shared';
+import { emptyFile } from '@synesthesia-project/core/file';
 
 import { ComposerConnection } from '../connections/composer';
 import { ControllerConnection } from '../connections/controller';
+
+import {MetaIDs} from './meta-ids';
+import { UnsavedChanges } from './unsaved-changes';
 
 interface ControllerState {
   controller: ControllerConnection;
@@ -11,10 +15,15 @@ interface ControllerState {
   lastUpdated: number;
 }
 
+type MainSongAndLayer = {state: composerProtocol.PlayStateData, controller: ControllerState};
+
 /**
  * Manage play state
  */
 export class ServerState {
+
+  private readonly metaIDs = new MetaIDs();
+  private readonly unsavedChanges = new UnsavedChanges();
 
   private readonly composers = new Set<ComposerConnection>();
   private readonly controllers = new Set<ControllerState>();
@@ -26,9 +35,20 @@ export class ServerState {
 
   public addComposer(composer: ComposerConnection) {
     this.composers.add(composer);
-    const playState = this.calculateComposerState();
-    if (playState)
-      composer.sendPlayState(playState.state);
+    const songAndControler = this.calculateMainSongAndController();
+    if (songAndControler) {
+      composer.sendPlayState(songAndControler.state);
+      const mainSongAndController = this.calculateMainSongAndController();
+      if (mainSongAndController) {
+        composer.sendPlayState(mainSongAndController.state);
+        const trackState = this.getTrackState(mainSongAndController.state);
+        composer.sendNotification({
+          type: 'cue-file-modified',
+          file: trackState,
+          id: mainSongAndController.state.meta.id
+        });
+      }
+    }
     composer.setRequestHandler(this.handleComposerRequest);
     composer.addListener('close', () => this.composers.delete(composer));
     composer.addListener('notification', this.handleComposerNotification(composer));
@@ -53,8 +73,8 @@ export class ServerState {
   }
 
   private handleComposerRequest(request: composerProtocol.Request): Promise<composerProtocol.Response> {
-    const playState = this.calculateComposerState();
-    if (!playState) {
+    const mainSongAndController = this.calculateMainSongAndController();
+    if (!mainSongAndController) {
       console.log ('no active controllers');
       return Promise.resolve({success: false});
     }
@@ -62,7 +82,7 @@ export class ServerState {
       case 'toggle':
       case 'pause':
       case 'go-to-time':
-        return playState.controller.controller.sendRequest(request);
+        return mainSongAndController.controller.controller.sendRequest(request);
     }
   }
 
@@ -70,12 +90,17 @@ export class ServerState {
     return (notification: composerProtocol.Notification) => {
       switch (notification.type) {
         case 'cue-file-modified': {
-          // Send all other composers the new cue file
-          for (const c of this.composers) {
-            if (composer !== c)
-              c.sendNotification(notification);
+          // Store the change
+          this.unsavedChanges.update(notification.id, notification.file);
+
+          // If it's the current song, send the notification to the all other composers
+          const mainSongAndController = this.calculateMainSongAndController();
+          if (mainSongAndController && mainSongAndController.state.meta.id === notification.id) {
+            for (const c of this.composers) {
+              if (composer !== c)
+                c.sendNotification(notification);
+            }
           }
-          break;
         }
       }
       console.log('got notif', notification);
@@ -83,19 +108,25 @@ export class ServerState {
   }
 
   private sendStateToComposers() {
-    const playState = this.calculateComposerState();
+    const mainSongAndController = this.calculateMainSongAndController();
     console.log(`play State Updated`);
-    if (playState) {
-      console.log(`sending state to ${this.composers.size} composers`, playState);
-      this.composers.forEach(composer => composer.sendPlayState(playState.state));
+    if (mainSongAndController) {
+      console.log(`sending state to ${this.composers.size} composers`, mainSongAndController);
+      this.composers.forEach(composer => composer.sendPlayState(mainSongAndController.state));
+      const trackState = this.getTrackState(mainSongAndController.state);
+      this.composers.forEach(composer => composer.sendNotification({
+        type: 'cue-file-modified',
+        file: trackState,
+        id: mainSongAndController.state.meta.id
+      }));
     }
     // TODO: handle no play state (i.e. no controller or no layers)
   }
 
-  private calculateComposerState() {
+  private calculateMainSongAndController() {
 
-    const playingLayers: {state: composerProtocol.PlayStateData, controller: ControllerState}[] = [];
-    const pausedLayers: {state: composerProtocol.PlayStateData, controller: ControllerState}[] = [];
+    const playingLayers: MainSongAndLayer[] = [];
+    const pausedLayers: MainSongAndLayer[] = [];
 
     for (const controller of this.controllers.values()) {
       if (controller.state) {
@@ -105,6 +136,7 @@ export class ServerState {
             const state: composerProtocol.PlayStateData = {
               durationMillis: layer.file.lengthMillis,
               meta: {
+                id: this.metaIDs.getId(layer.file),
                 info: {
                   title: layer.file.title,
                   artist: layer.file.artist
@@ -131,6 +163,15 @@ export class ServerState {
       return layer;
 
     return null;
+  }
+
+  private getTrackState(state: composerProtocol.PlayStateData) {
+    const trackState = this.unsavedChanges.getCurrentRevision(state.meta.id);
+    if (trackState) {
+      return trackState;
+    } else {
+      return emptyFile(state.durationMillis);
+    }
   }
 
 
