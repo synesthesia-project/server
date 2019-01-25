@@ -83,7 +83,25 @@ export class ServerState {
       case 'pause':
       case 'go-to-time':
         return mainSongAndController.controller.controller.sendRequest(request);
+      case 'file-action':
+        return this.handleFileAction(request);
     }
+  }
+
+  private handleFileAction(request: composerProtocol.FileActionRequest): Promise<composerProtocol.Response> {
+    let success = false;
+    switch (request.action) {
+      case 'undo':
+      success = this.unsavedChanges.undo(request.id);
+      break;
+      case 'redo':
+      success = this.unsavedChanges.redo(request.id);
+      break;
+    }
+    if (success) {
+      this.sendStateToComposers();
+    }
+    return Promise.resolve({success});
   }
 
   private handleComposerNotification(composer: ComposerConnection) {

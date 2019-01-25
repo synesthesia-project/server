@@ -1,3 +1,5 @@
+import {isEqual} from 'lodash';
+
 import { CueFile } from '@synesthesia-project/core/file';
 
 const MAX_REVISIONS_PER_FILE = 30;
@@ -23,6 +25,10 @@ export class UnsavedChanges {
       };
       this.map.set(id, state);
     }
+    if (state.revisions.length > 0 && isEqual(state.revisions[state.revisions.length - 1], file)) {
+      // No change to file
+      return;
+    }
     state.revisions.push(file);
     while (state.revisions.length > MAX_REVISIONS_PER_FILE) {
       state.revisions.shift();
@@ -31,10 +37,37 @@ export class UnsavedChanges {
   }
 
   public getCurrentRevision(id: string) {
+    console.log('getCurrentRevision', id);
     const state = this.map.get(id);
     if (state)
       return state.revisions[state.revisions.length - 1];
     return null;
+  }
+
+  /** Undo a modification, return true if successful and false otherwise */
+  public undo(id: string) {
+    console.log('undo', id);
+    const state = this.map.get(id);
+    if (state && state.revisions.length > 1) {
+      const revision = state.revisions.pop();
+      if (revision) state.undone.push(revision);
+      return true;
+    }
+    return false;
+  }
+
+  /** Redo a modification, return true if successful and false otherwise */
+  public redo(id: string) {
+    console.log('redo', id);
+    const state = this.map.get(id);
+    if (state) {
+      const revision = state.undone.pop();
+      if (revision) {
+        state.revisions.push(revision);
+        return true;
+      }
+    }
+    return false;
   }
 
 }
