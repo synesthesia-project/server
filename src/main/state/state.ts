@@ -1,5 +1,5 @@
 
-import { PlayStateData as ControllerPlayStateData, Layer } from '@synesthesia-project/core/protocols/control/messages';
+import { PlayStateData as ControllerPlayStateData } from '@synesthesia-project/core/protocols/control/messages';
 import * as composerProtocol from '@synesthesia-project/composer/dist/integration/shared';
 import { emptyFile } from '@synesthesia-project/core/file';
 

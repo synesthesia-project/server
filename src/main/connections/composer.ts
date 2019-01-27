@@ -47,7 +47,7 @@ export class ComposerConnection extends RequestHandlerEndpoint<Request, Response
     }
   }
 
-  public removeListener(event: 'close', listener: () => void) {
+  public removeListener(_event: 'close', listener: () => void) {
     this.closeListeners.delete(listener);
   }
 
