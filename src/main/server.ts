@@ -1,8 +1,6 @@
 import * as fs from 'fs';
 import * as http from 'http';
 import * as WebSocket from 'ws';
-import { ServerEndpoint } from '@synesthesia-project/core/protocols/control';
-import { PlayStateData } from '@synesthesia-project/core/protocols/control/messages';
 import { CONTROLLER_WEBSOCKET_PATH, COMPOSER_PATH } from '@synesthesia-project/core/constants';
 
 import * as composer from '@synesthesia-project/composer';

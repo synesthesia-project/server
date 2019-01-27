@@ -1,4 +1,3 @@
-import * as core from '@synesthesia-project/core';
 import { DEFAULT_SYNESTHESIA_PORT } from '@synesthesia-project/core/constants';
 
 import { Server } from './server';

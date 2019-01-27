@@ -5,6 +5,7 @@ var ts = require('gulp-typescript');
 var tslint = require('tslint');
 var gulpTslint = require('gulp-tslint');
 var runSequence = require('run-sequence');
+var mocha = require('gulp-mocha');
 
 var tsProject = ts.createProject('src/tsconfig.json');
 
@@ -47,3 +48,8 @@ gulp.task('default', function(callback) {
     'tslint',
     callback);
 });
+
+gulp.task('test', () =>
+	gulp.src('build/test/**/*.js', {read: false})
+		.pipe(mocha({reporter: 'nyan'}))
+);
