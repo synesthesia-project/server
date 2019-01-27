@@ -30,3 +30,7 @@ steps:
     git checkout node_modules
     gulp
   displayName: 'build server'
+
+- script: |
+    gulp test
+  displayName: 'unit tests'
