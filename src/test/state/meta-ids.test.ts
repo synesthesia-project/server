@@ -13,7 +13,7 @@ describe('MetaIDs', function() {
         title: 'some song',
         artist: 'some artist',
         lengthMillis: 1234
-      })).to.equal('3ad75d2398587024a3b82216a1244e4f6bdecc5e');
+      })).to.equal('8e8597ef1d809a1afd9f839841cb099337cfb70c');
     });
 
     it('basic title/author meta (reordered)', function() {
@@ -22,7 +22,7 @@ describe('MetaIDs', function() {
         lengthMillis: 1234,
         type: 'meta',
         title: 'some song',
-      })).to.equal('3ad75d2398587024a3b82216a1244e4f6bdecc5e');
+      })).to.equal('8e8597ef1d809a1afd9f839841cb099337cfb70c');
     });
 
     it('basic title/author meta (extra data)', function() {
@@ -32,7 +32,7 @@ describe('MetaIDs', function() {
         type: 'meta',
         title: 'some song',
         foo: 'bar'
-      } as any)).to.equal('3ad75d2398587024a3b82216a1244e4f6bdecc5e');
+      } as any)).to.equal('8e8597ef1d809a1afd9f839841cb099337cfb70c');
     });
 
   });
