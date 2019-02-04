@@ -35,8 +35,10 @@ describe('Storage', () => {
         layers: []
       };
 
+      // Check file does not yet exist
+      await promiseError(s.getFile(id), 'file not found');
+      // Save the file
       await s.saveFile(id, f);
-
       // Check invalid ID does not return file
       await promiseError(s.getFile('non-existent-id'), 'file not found');
       // Check file is correctly returned
