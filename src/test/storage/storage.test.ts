@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { CueFile } from '@synesthesia-project/core/file/index';
 
 import { Storage } from '../../main/storage/storage';
+import { TEST_DATA } from '../util/consts';
 
 /**
  * Return a new promise that fails if the given promise does not fail in the correct manner
@@ -22,14 +23,14 @@ describe('Storage', () => {
   describe('getFile()', () => {
 
     it('Non-Existant', async () => {
-      const s = new Storage();
+      const s = new Storage(TEST_DATA);
 
       await promiseError(s.getFile('non-existent-id'), 'file not found');
     });
 
     it('Set And Get', async () => {
       const id = '3fjc94jst';
-      const s = new Storage();
+      const s = new Storage(TEST_DATA);
       const f: CueFile = {
         lengthMillis: 12345,
         layers: []
