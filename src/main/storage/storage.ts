@@ -5,12 +5,16 @@ import { CueFile } from '@synesthesia-project/core/file/index';
  */
 export class Storage {
 
-  public async getFile(_id: string): Promise<CueFile> {
-    throw new Error('not implemented');
+  private readonly files = new Map<string, CueFile>();
+
+  public async getFile(id: string): Promise<CueFile> {
+    const f = this.files.get(id);
+    if (f) return f;
+    throw new Error('file not found');
   }
 
-  public async saveFile(_id: string, _file: CueFile): Promise<void> {
-    throw new Error('not implemented');
+  public async saveFile(id: string, file: CueFile): Promise<void> {
+    this.files.set(id, file);
   }
 
 }
