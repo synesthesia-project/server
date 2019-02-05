@@ -8,6 +8,7 @@ import { ControllerConnection } from '../connections/controller';
 
 import {MetaIDs} from './meta-ids';
 import { UnsavedChanges } from './unsaved-changes';
+import { Storage } from '../storage/storage';
 
 interface ControllerState {
   controller: ControllerConnection;
@@ -24,11 +25,13 @@ export class ServerState {
 
   private readonly metaIDs = new MetaIDs();
   private readonly unsavedChanges = new UnsavedChanges();
+  private readonly storage: Storage;
 
   private readonly composers = new Set<ComposerConnection>();
   private readonly controllers = new Set<ControllerState>();
 
-  public constructor() {
+  public constructor(dataDir: string) {
+    this.storage = new Storage(dataDir);
     this.handleComposerRequest = this.handleComposerRequest.bind(this);
     this.handleComposerNotification = this.handleComposerNotification.bind(this);
   }
@@ -41,12 +44,13 @@ export class ServerState {
       const mainSongAndController = this.calculateMainSongAndController();
       if (mainSongAndController) {
         composer.sendPlayState(mainSongAndController.state);
-        const trackState = this.getTrackState(mainSongAndController.state);
-        composer.sendNotification({
-          type: 'cue-file-modified',
-          file: trackState,
-          id: mainSongAndController.state.meta.id
-        });
+        this.getTrackState(mainSongAndController.state).then(trackState =>
+          composer.sendNotification({
+            type: 'cue-file-modified',
+            file: trackState,
+            id: mainSongAndController.state.meta.id
+          })
+        );
       }
     }
     composer.setRequestHandler(this.handleComposerRequest);
@@ -88,7 +92,7 @@ export class ServerState {
     }
   }
 
-  private handleFileAction(request: composerProtocol.FileActionRequest): Promise<composerProtocol.Response> {
+  private async handleFileAction(request: composerProtocol.FileActionRequest): Promise<composerProtocol.Response> {
     let success = false;
     switch (request.action) {
       case 'undo':
@@ -96,6 +100,12 @@ export class ServerState {
       break;
       case 'redo':
       success = this.unsavedChanges.redo(request.id);
+      break;
+      case 'save':
+      success = await this.unsavedChanges.save(this.storage, request.id).catch(err => {
+        console.error(err);
+        return false;
+      });
       break;
     }
     if (success) {
@@ -125,13 +135,13 @@ export class ServerState {
     };
   }
 
-  private sendStateToComposers() {
+  private async sendStateToComposers() {
     const mainSongAndController = this.calculateMainSongAndController();
     console.log(`play State Updated`);
     if (mainSongAndController) {
       console.log(`sending state to ${this.composers.size} composers`, mainSongAndController);
       this.composers.forEach(composer => composer.sendPlayState(mainSongAndController.state));
-      const trackState = this.getTrackState(mainSongAndController.state);
+      const trackState = await this.getTrackState(mainSongAndController.state);
       this.composers.forEach(composer => composer.sendNotification({
         type: 'cue-file-modified',
         file: trackState,
@@ -183,13 +193,14 @@ export class ServerState {
     return null;
   }
 
-  private getTrackState(state: composerProtocol.PlayStateData) {
+  private async getTrackState(state: composerProtocol.PlayStateData) {
     const trackState = this.unsavedChanges.getCurrentRevision(state.meta.id);
-    if (trackState) {
-      return trackState;
-    } else {
-      return emptyFile(state.durationMillis);
-    }
+    if (trackState) return trackState;
+    // Nothing in-memory, check disk
+    const savedState = await this.storage.getFile(state.meta.id).catch(() => null);
+    if (savedState) return savedState;
+    // Nothing in-memory or on disk
+    return emptyFile(state.durationMillis);
   }
 
 
