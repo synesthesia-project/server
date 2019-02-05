@@ -8,7 +8,7 @@ const CUE_FILES_PATH = 'cue_files';
 const filePath = (dataDir: string, id: string) => path.join(dataDir, CUE_FILES_PATH, id, 'current.scue');
 
 /**
- * This class will evenually store its files, but for now we'll just keep them in memory
+ * Class to manage storing CueFiles to persistent storage
  */
 export class Storage {
 
@@ -18,8 +18,8 @@ export class Storage {
     this.dataDir = dataDir;
   }
 
-  public async getFile(id: string): Promise<CueFile> {
-    const file = await fs.readFile(filePath(this.dataDir, id))
+  public async getFile(trackId: string): Promise<CueFile> {
+    const file = await fs.readFile(filePath(this.dataDir, trackId))
       .catch((err: Error) => {
         if (err.message.startsWith('ENOENT'))
           throw new Error('file not found');
@@ -28,10 +28,24 @@ export class Storage {
     return JSON.parse(file.toString());
   }
 
-  public async saveFile(id: string, file: CueFile): Promise<void> {
-    const pathname = filePath(this.dataDir, id);
+  public async saveFile(trackId: string, file: CueFile): Promise<void> {
+    const pathname = filePath(this.dataDir, trackId);
     await fs.mkdir(path.dirname(pathname), {recursive: true});
     return fs.writeFile(pathname, JSON.stringify(file));
+  }
+
+  /**
+   * Get a list of all revisions that have been stored for a particular song id
+   */
+  public async getRevisions(_trackId: string): Promise<string[]> {
+    throw new Error('not implemented');
+  }
+
+  /**
+   * Get a specific revision of a track.
+   */
+  public async getRevision(_trackId: string, _revisionName: string): Promise<CueFile> {
+    throw new Error('not implemented');
   }
 
 }

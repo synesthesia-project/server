@@ -20,7 +20,7 @@ function promiseError(promise: Promise<{}>, errorMsg: string): Promise<void> {
 
 describe('Storage', () => {
 
-  describe('getFile()', () => {
+  describe('Basic storage + fetching', () => {
 
     it('Non-Existant', async () => {
       const s = new Storage(TEST_DATA);
@@ -44,6 +44,36 @@ describe('Storage', () => {
       await promiseError(s.getFile('non-existent-id'), 'file not found');
       // Check file is correctly returned
       expect(await s.getFile(id)).to.deep.equal(f);
+    });
+
+  });
+
+  describe('multiple revisions', () => {
+
+    it('Non-Existant', async () => {
+      const s = new Storage(TEST_DATA);
+
+      expect(await s.getRevisions('non-existent-id')).to.deep.equal([]);
+    });
+
+    it('Single Revision', async () => {
+      const id = '3fjc94jst';
+      const s = new Storage(TEST_DATA);
+      const f: CueFile = {
+        lengthMillis: 12345,
+        layers: []
+      };
+
+      // Check file does not yet exist
+      await promiseError(s.getFile(id), 'file not found');
+      expect(await s.getRevisions(id)).to.deep.equal([]);
+      // Save the file
+      await s.saveFile(id, f);
+      // Check file is correctly returned
+      expect(await s.getFile(id)).to.deep.equal(f);
+      const revisions = await s.getRevisions(id);
+      expect(revisions.length).to.equal(1);
+      expect(await s.getRevision(id, revisions[0])).to.deep.equal(f);
     });
 
   });
