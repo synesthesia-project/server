@@ -1,7 +1,8 @@
+import {isEqual} from 'lodash';
 
 import { PlayStateData as ControllerPlayStateData } from '@synesthesia-project/core/protocols/control/messages';
 import * as composerProtocol from '@synesthesia-project/composer/dist/integration/shared';
-import { emptyFile } from '@synesthesia-project/core/file';
+import { CueFile, emptyFile } from '@synesthesia-project/core/file';
 
 import { ComposerConnection } from '../connections/composer';
 import { ControllerConnection } from '../connections/controller';
@@ -30,6 +31,8 @@ export class ServerState {
   private readonly composers = new Set<ComposerConnection>();
   private readonly controllers = new Set<ControllerState>();
 
+  private lastFileSentToAllComposers: composerProtocol.ServerCueFileModifiedNotification | null = null;
+
   public constructor(dataDir: string) {
     this.storage = new Storage(dataDir);
     this.handleComposerRequest = this.handleComposerRequest.bind(this);
@@ -47,8 +50,9 @@ export class ServerState {
         this.getTrackState(mainSongAndController.state).then(trackState =>
           composer.sendNotification({
             type: 'cue-file-modified',
-            file: trackState,
-            id: mainSongAndController.state.meta.id
+            file: trackState.state,
+            id: mainSongAndController.state.meta.id,
+            fileState: trackState.fileState
           })
         );
       }
@@ -114,20 +118,15 @@ export class ServerState {
     return Promise.resolve({success});
   }
 
-  private handleComposerNotification(composer: ComposerConnection) {
+  private handleComposerNotification(_composer: ComposerConnection) {
     return (notification: composerProtocol.Notification) => {
       switch (notification.type) {
         case 'cue-file-modified': {
-          // Store the change
-          this.unsavedChanges.update(notification.id, notification.file);
-
-          // If it's the current song, send the notification to the all other composers
-          const mainSongAndController = this.calculateMainSongAndController();
-          if (mainSongAndController && mainSongAndController.state.meta.id === notification.id) {
-            for (const c of this.composers) {
-              if (composer !== c)
-                c.sendNotification(notification);
-            }
+          // Only update unsavedChanges if the file has actually changed
+          if (!this.lastFileSentToAllComposers || !isEqual(this.lastFileSentToAllComposers.file, notification.file)) {
+            this.unsavedChanges.update(notification.id, notification.file);
+            // Send to ALL composers, because notification includes updated FileState
+            this.sendStateToComposers();
           }
         }
       }
@@ -142,11 +141,13 @@ export class ServerState {
       console.log(`sending state to ${this.composers.size} composers`, mainSongAndController);
       this.composers.forEach(composer => composer.sendPlayState(mainSongAndController.state));
       const trackState = await this.getTrackState(mainSongAndController.state);
-      this.composers.forEach(composer => composer.sendNotification({
+      const notification = this.lastFileSentToAllComposers = {
         type: 'cue-file-modified',
-        file: trackState,
-        id: mainSongAndController.state.meta.id
-      }));
+        file: trackState.state,
+        id: mainSongAndController.state.meta.id,
+        fileState: trackState.fileState
+      };
+      this.composers.forEach(composer => composer.sendNotification(notification));
     }
     // TODO: handle no play state (i.e. no controller or no layers)
   }
@@ -193,14 +194,23 @@ export class ServerState {
     return null;
   }
 
-  private async getTrackState(state: composerProtocol.PlayStateData) {
-    const trackState = this.unsavedChanges.getCurrentRevision(state.meta.id);
-    if (trackState) return trackState;
+  private async getTrackState(state: composerProtocol.PlayStateData): Promise<{state: CueFile, fileState: composerProtocol.FileState}> {
+    let fileState: composerProtocol.FileState = {
+      canRedo: false,
+      canSave: false,
+      canUndo: false
+    };
+    const unsavedState = this.unsavedChanges.getCurrentRevision(state.meta.id);
+    if (unsavedState) {
+      fileState = unsavedState.fileState;
+      if (unsavedState.state)
+        return {state: unsavedState.state, fileState};
+    }
     // Nothing in-memory, check disk
     const savedState = await this.storage.getFile(state.meta.id).catch(() => null);
-    if (savedState) return savedState;
+    if (savedState) return {state: savedState, fileState};
     // Nothing in-memory or on disk
-    return emptyFile(state.durationMillis);
+    return {state: emptyFile(state.durationMillis), fileState};
   }
 
 

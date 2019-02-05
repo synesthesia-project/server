@@ -1,8 +1,7 @@
-import {isEqual} from 'lodash';
-
 import { Storage } from '../storage/storage';
 
 import { CueFile } from '@synesthesia-project/core/file';
+import { FileState } from '@synesthesia-project/composer/dist/integration/shared';
 
 const MAX_REVISIONS_PER_FILE = 30;
 
@@ -27,10 +26,6 @@ export class UnsavedChanges {
       };
       this.map.set(id, state);
     }
-    if (state.revisions.length > 0 && isEqual(state.revisions[state.revisions.length - 1], file)) {
-      // No change to file
-      return;
-    }
     state.revisions.push(file);
     while (state.revisions.length > MAX_REVISIONS_PER_FILE) {
       state.revisions.shift();
@@ -38,11 +33,18 @@ export class UnsavedChanges {
     state.undone = [];
   }
 
-  public getCurrentRevision(id: string) {
+  public getCurrentRevision(id: string): {state: CueFile | null, fileState: FileState} | null {
     console.log('getCurrentRevision', id);
     const state = this.map.get(id);
     if (state)
-      return state.revisions[state.revisions.length - 1];
+      return {
+        state: state.revisions.length > 0 ? state.revisions[state.revisions.length - 1] : null,
+        fileState: {
+          canRedo: state.undone.length > 0,
+          canUndo: state.revisions.length > 0,
+          canSave: state.revisions.length > 0
+        }
+      };
     return null;
   }
 
@@ -50,10 +52,12 @@ export class UnsavedChanges {
   public undo(id: string) {
     console.log('undo', id);
     const state = this.map.get(id);
-    if (state && state.revisions.length > 1) {
+    if (state) {
       const revision = state.revisions.pop();
-      if (revision) state.undone.push(revision);
-      return true;
+      if (revision) {
+        state.undone.push(revision);
+        return true;
+      }
     }
     return false;
   }
