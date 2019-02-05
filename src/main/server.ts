@@ -12,7 +12,7 @@ import {ServerState} from './state/state';
 
 export class Server {
 
-    private readonly state = new ServerState();
+    private readonly state: ServerState;
 
     private readonly port: number;
     private readonly server: http.Server;
@@ -20,8 +20,10 @@ export class Server {
 
     public constructor(
         port: number,
+        dataDir: string,
     ) {
         this.port = port;
+        this.state = new ServerState(dataDir);
 
         this.server = http.createServer((request, response) => {
 

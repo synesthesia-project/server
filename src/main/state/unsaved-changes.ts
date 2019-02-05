@@ -1,5 +1,7 @@
 import {isEqual} from 'lodash';
 
+import { Storage } from '../storage/storage';
+
 import { CueFile } from '@synesthesia-project/core/file';
 
 const MAX_REVISIONS_PER_FILE = 30;
@@ -66,6 +68,19 @@ export class UnsavedChanges {
         state.revisions.push(revision);
         return true;
       }
+    }
+    return false;
+  }
+
+  /** Redo a modification, return true if successful and false otherwise */
+  public async save(storage: Storage, id: string) {
+    console.log('save', id);
+    const state = this.map.get(id);
+    if (state) {
+      const current = state.revisions[state.revisions.length - 1];
+      await storage.saveFile(id, current);
+      this.map.delete(id);
+      return true;
     }
     return false;
   }
