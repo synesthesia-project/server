@@ -27,7 +27,7 @@ export class ComposerConnection extends RequestHandlerEndpoint<Request, Response
     this.closeListeners.forEach(l => l());
   }
 
-  public sendPlayState(data: PlayStateData) {
+  public sendPlayState(data: PlayStateData | null) {
     this.sendNotification({
       type: 'state', data
     });

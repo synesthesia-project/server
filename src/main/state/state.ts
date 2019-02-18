@@ -71,7 +71,10 @@ export class ServerState {
     this.controllers.add(controllerState);
     // TODO: add listeners (handle when closed especially)
     controller.addListener({
-      closed: () => this.controllers.delete(controllerState),
+      closed: () => {
+        this.controllers.delete(controllerState);
+        this.sendStateToComposers();
+      },
       playStateUpdated: state => {
         controllerState.state = state;
         controllerState.lastUpdated = new Date().getTime();
@@ -148,8 +151,9 @@ export class ServerState {
         fileState: trackState.fileState
       };
       this.composers.forEach(composer => composer.sendNotification(notification));
+    } else {
+      this.composers.forEach(composer => composer.sendPlayState(null));
     }
-    // TODO: handle no play state (i.e. no controller or no layers)
   }
 
   private calculateMainSongAndController() {
