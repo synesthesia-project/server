@@ -1,12 +1,13 @@
 import * as fs from 'fs';
 import * as http from 'http';
 import * as WebSocket from 'ws';
-import { CONTROLLER_WEBSOCKET_PATH, COMPOSER_PATH } from '@synesthesia-project/core/constants';
+import { BROADCAST_UPSTREAM_WEBSOCKET_PATH, CONTROLLER_WEBSOCKET_PATH, COMPOSER_PATH } from '@synesthesia-project/core/constants';
 
 import * as composer from '@synesthesia-project/composer';
 
 import {ComposerConnection} from './connections/composer';
 import {ControllerConnection} from './connections/controller';
+import {DownstreamConnection} from './connections/downstream';
 
 import {ServerState} from './state/state';
 
@@ -103,6 +104,13 @@ export class Server {
         if (url === CONTROLLER_WEBSOCKET_PATH) {
             // Initiate a new connection to composer
             this.state.addController(new ControllerConnection(ws));
+            return;
+        }
+
+        if (url === BROADCAST_UPSTREAM_WEBSOCKET_PATH) {
+            // We are the upstream endpoint:
+            // Initiate a new connection to the downstream endpoint
+            this.state.addDownstreamConnection(new DownstreamConnection(ws));
             return;
         }
     }

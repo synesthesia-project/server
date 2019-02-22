@@ -1,11 +1,13 @@
 import {isEqual} from 'lodash';
 
-import { PlayStateData as ControllerPlayStateData } from '@synesthesia-project/core/protocols/control/messages';
+import { File as ControllerFile, PlayStateData as ControllerPlayStateData } from '@synesthesia-project/core/protocols/control/messages';
+import { LayerState as BcastLayerState, PlayStateData as BcastPlayStateData } from '@synesthesia-project/core/protocols/broadcast/messages';
 import * as composerProtocol from '@synesthesia-project/composer/dist/integration/shared';
 import { CueFile, emptyFile } from '@synesthesia-project/core/file';
 
 import { ComposerConnection } from '../connections/composer';
 import { ControllerConnection } from '../connections/controller';
+import { DownstreamConnection } from '../connections/downstream';
 
 import {MetaIDs} from './meta-ids';
 import { UnsavedChanges } from './unsaved-changes';
@@ -17,7 +19,16 @@ interface ControllerState {
   lastUpdated: number;
 }
 
-type MainSongAndLayer = {state: composerProtocol.PlayStateData, controller: ControllerState};
+type FileMeta = {
+  id: string;
+  durationMillis: number;
+  info: {
+    title: string;
+    artist?: string;
+  }
+};
+
+type MainSongAndLayer = { state: composerProtocol.PlayStateData, controller: ControllerState };
 
 /**
  * Manage play state
@@ -30,6 +41,7 @@ export class ServerState {
 
   private readonly composers = new Set<ComposerConnection>();
   private readonly controllers = new Set<ControllerState>();
+  private readonly downstreamConnections = new Set<DownstreamConnection>();
 
   private lastFileSentToAllComposers: composerProtocol.ServerCueFileModifiedNotification | null = null;
 
@@ -47,14 +59,15 @@ export class ServerState {
       const mainSongAndController = this.calculateMainSongAndController();
       if (mainSongAndController) {
         composer.sendPlayState(mainSongAndController.state);
-        this.getTrackState(mainSongAndController.state).then(trackState =>
-          composer.sendNotification({
-            type: 'cue-file-modified',
-            file: trackState.state,
-            id: mainSongAndController.state.meta.id,
-            fileState: trackState.fileState
-          })
-        );
+        this.getTrackState(mainSongAndController.state.meta.id, mainSongAndController.state.durationMillis)
+          .then(trackState =>
+            composer.sendNotification({
+              type: 'cue-file-modified',
+              file: trackState.state,
+              id: mainSongAndController.state.meta.id,
+              fileState: trackState.fileState
+            })
+          );
       }
     }
     composer.setRequestHandler(this.handleComposerRequest);
@@ -69,18 +82,29 @@ export class ServerState {
       lastUpdated: new Date().getTime()
     };
     this.controllers.add(controllerState);
-    // TODO: add listeners (handle when closed especially)
     controller.addListener({
       closed: () => {
         this.controllers.delete(controllerState);
         this.sendStateToComposers();
+        this.sendStateDownstream();
       },
       playStateUpdated: state => {
         controllerState.state = state;
         controllerState.lastUpdated = new Date().getTime();
         this.sendStateToComposers();
+        this.sendStateDownstream();
       }
     });
+  }
+
+  public addDownstreamConnection(connection: DownstreamConnection) {
+    this.downstreamConnections.add(connection);
+    connection.addListener({
+      closed: () => {
+        this.downstreamConnections.delete(connection);
+      },
+    });
+    this.sendStateToDownstreamConnection(connection);
   }
 
   private handleComposerRequest(request: composerProtocol.Request): Promise<composerProtocol.Response> {
@@ -117,6 +141,7 @@ export class ServerState {
     }
     if (success) {
       this.sendStateToComposers();
+      this.sendStateDownstream();
     }
     return Promise.resolve({success});
   }
@@ -130,6 +155,7 @@ export class ServerState {
             this.unsavedChanges.update(notification.id, notification.file);
             // Send to ALL composers, because notification includes updated FileState
             this.sendStateToComposers();
+            this.sendStateDownstream();
           }
         }
       }
@@ -143,7 +169,9 @@ export class ServerState {
     if (mainSongAndController) {
       console.log(`sending state to ${this.composers.size} composers`, mainSongAndController);
       this.composers.forEach(composer => composer.sendPlayState(mainSongAndController.state));
-      const trackState = await this.getTrackState(mainSongAndController.state);
+      const id = mainSongAndController.state.meta.id;
+      const durationMillis = mainSongAndController.state.durationMillis;
+      const trackState = await this.getTrackState(id, durationMillis);
       const notification = this.lastFileSentToAllComposers = {
         type: 'cue-file-modified',
         file: trackState.state,
@@ -156,6 +184,22 @@ export class ServerState {
     }
   }
 
+  private getFileMeta(file: ControllerFile): FileMeta {
+    if (file.type === 'meta') {
+      return {
+        id: this.metaIDs.getId(file),
+        durationMillis: file.lengthMillis,
+        info: {
+          title: file.title,
+          artist: file.artist
+        }
+      }
+    } else {
+      console.error('file based not supported yet');
+      throw new Error('file based not supported yet');
+    }
+  }
+
   private calculateMainSongAndController() {
 
     const playingLayers: MainSongAndLayer[] = [];
@@ -165,22 +209,16 @@ export class ServerState {
       if (controller.state) {
         console.log(controller.state);
         for (const layer of controller.state.layers) {
-          if (layer.file.type === 'meta') {
-            const state: composerProtocol.PlayStateData = {
-              durationMillis: layer.file.lengthMillis,
-              meta: {
-                id: this.metaIDs.getId(layer.file),
-                info: {
-                  title: layer.file.title,
-                  artist: layer.file.artist
-                }
-              },
-              state: layer.state
-            };
-            (layer.state.type === 'playing' ? playingLayers : pausedLayers).push({state, controller});
-          } else {
-            console.error('file based not supported yet');
-          }
+          const meta = this.getFileMeta(layer.file);
+          const state: composerProtocol.PlayStateData = {
+            durationMillis: meta.durationMillis,
+            meta: {
+              id: meta.id,
+              info: meta.info
+            },
+            state: layer.state
+          };
+          (layer.state.type === 'playing' ? playingLayers : pausedLayers).push({ state, controller });
         }
       }
     }
@@ -198,23 +236,69 @@ export class ServerState {
     return null;
   }
 
-  private async getTrackState(state: composerProtocol.PlayStateData): Promise<{state: CueFile, fileState: composerProtocol.FileState}> {
+  private async getTrackState(id: string, durationMillis: number): Promise<{state: CueFile, fileState: composerProtocol.FileState}> {
     let fileState: composerProtocol.FileState = {
       canRedo: false,
       canSave: false,
       canUndo: false
     };
-    const unsavedState = this.unsavedChanges.getCurrentRevision(state.meta.id);
+    const unsavedState = this.unsavedChanges.getCurrentRevision(id);
     if (unsavedState) {
       fileState = unsavedState.fileState;
       if (unsavedState.state)
         return {state: unsavedState.state, fileState};
     }
     // Nothing in-memory, check disk
-    const savedState = await this.storage.getFile(state.meta.id).catch(() => null);
+    const savedState = await this.storage.getFile(id).catch(() => null);
     if (savedState) return {state: savedState, fileState};
     // Nothing in-memory or on disk
-    return {state: emptyFile(state.durationMillis), fileState};
+    return { state: emptyFile(durationMillis), fileState};
+  }
+
+  private async getFileHash(file: ControllerFile): Promise<string> {
+    const meta = this.getFileMeta(file);
+    await this.getTrackState(meta.id, meta.durationMillis);
+
+    // TODO
+    return 'asdfg';
+  }
+
+  private async getProtocolState(): Promise<BcastPlayStateData> {
+    const layerPromises: Promise<BcastLayerState | null>[] = [];
+    for (const controller of this.controllers) {
+      if (controller.state) {
+        for (const layer of controller.state.layers) {
+          if (layer.state.type === 'playing') {
+            const layerState = layer.state;
+            // Get the file hash, and add it to the layerPromises
+            layerPromises.push(
+              this.getFileHash(layer.file)
+                .then<BcastLayerState>(fileHash => ({
+                  fileHash,
+                  amplitude: 1,
+                  effectiveStartTimeMillis: layerState.effectiveStartTimeMillis,
+                  playSpeed: layerState.playSpeed
+                })));
+          }
+        }
+      }
+    }
+    const layers: BcastLayerState[] = [];
+    for (const l of await Promise.all(layerPromises)) {
+      if (l) layers.push(l);
+    }
+    return {layers};
+  }
+
+  private async sendStateToDownstreamConnection(connection: DownstreamConnection) {
+    connection.sendState(await this.getProtocolState());
+  }
+
+  private async sendStateDownstream() {
+    const state = await this.getProtocolState();
+    for(const connection of this.downstreamConnections) {
+      connection.sendState(state);
+    }
   }
 
 
