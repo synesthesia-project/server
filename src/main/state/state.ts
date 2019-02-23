@@ -316,6 +316,12 @@ export class ServerState {
     }
   }
 
+  public async getActiveFileByHash(hash: string) {
+    const file = await this.cueFileHashLookup.getObject(hash);
+    if (file) return file;
+    throw new Error('unknown hash');
+  }
+
 
 }
 

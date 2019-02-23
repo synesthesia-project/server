@@ -110,7 +110,10 @@ export class Server {
         if (url === BROADCAST_UPSTREAM_WEBSOCKET_PATH) {
             // We are the upstream endpoint:
             // Initiate a new connection to the downstream endpoint
-            this.state.addDownstreamConnection(new DownstreamConnection(ws));
+            this.state.addDownstreamConnection(new DownstreamConnection(
+                ws,
+                hash => this.state.getActiveFileByHash(hash)
+            ));
             return;
         }
     }

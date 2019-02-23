@@ -1,5 +1,6 @@
 import * as WebSocket from 'ws';
 
+import { CueFile } from '@synesthesia-project/core/file';
 import { UpstreamEndpoint } from '@synesthesia-project/core/protocols/broadcast';
 
 interface DownstreamConnectionListener {
@@ -13,13 +14,18 @@ export class DownstreamConnection extends UpstreamEndpoint {
 
   private readonly listeners = new Set<DownstreamConnectionListener>();
 
-  public constructor(ws: WebSocket) {
+  public constructor(
+        ws: WebSocket,
+        getFile: (fileHash: string) => Promise<CueFile>
+      ) {
     super(
       msg => ws.send(JSON.stringify(msg)),
       pingData => {
         console.log('Got Ping Data:', pingData);
-      }
+      },
+      getFile
     );
+    console.log('initialised', this);
 
     ws.on('message', msg => this.recvMessage(JSON.parse(msg)));
     ws.on('close', () => this.closed());
