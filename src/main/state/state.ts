@@ -5,11 +5,14 @@ import { LayerState as BcastLayerState, PlayStateData as BcastPlayStateData } fr
 import * as composerProtocol from '@synesthesia-project/composer/dist/integration/shared';
 import { CueFile, emptyFile } from '@synesthesia-project/core/file';
 
+import { filterNotNull } from '../util';
+
 import { ComposerConnection } from '../connections/composer';
 import { ControllerConnection } from '../connections/controller';
 import { DownstreamConnection } from '../connections/downstream';
 
-import {MetaIDs} from './meta-ids';
+import { MetaIDs } from './meta-ids';
+import { ObjectHashLookup } from './object-hash-lookup';
 import { UnsavedChanges } from './unsaved-changes';
 import { Storage } from '../storage/storage';
 
@@ -38,6 +41,9 @@ export class ServerState {
   private readonly metaIDs = new MetaIDs();
   private readonly unsavedChanges = new UnsavedChanges();
   private readonly storage: Storage;
+
+  private readonly cueFileHashLookup = new ObjectHashLookup<CueFile>();
+  private lastState: BcastPlayStateData = {layers: []};
 
   private readonly composers = new Set<ComposerConnection>();
   private readonly controllers = new Set<ControllerState>();
@@ -104,7 +110,7 @@ export class ServerState {
         this.downstreamConnections.delete(connection);
       },
     });
-    this.sendStateToDownstreamConnection(connection);
+    connection.sendState(this.lastState);
   }
 
   private handleComposerRequest(request: composerProtocol.Request): Promise<composerProtocol.Response> {
@@ -193,7 +199,7 @@ export class ServerState {
           title: file.title,
           artist: file.artist
         }
-      }
+      };
     } else {
       console.error('file based not supported yet');
       throw new Error('file based not supported yet');
@@ -255,49 +261,58 @@ export class ServerState {
     return { state: emptyFile(durationMillis), fileState};
   }
 
-  private async getFileHash(file: ControllerFile): Promise<string> {
-    const meta = this.getFileMeta(file);
-    await this.getTrackState(meta.id, meta.durationMillis);
-
-    // TODO: put most of this logic in a utility class outside of this file
-    return 'asdfg';
-  }
-
-  private async getProtocolState(): Promise<BcastPlayStateData> {
-    const layerPromises: Promise<BcastLayerState | null>[] = [];
+  private async updateProtocolState(): Promise<void> {
+    type LayerResult = {
+      file: CueFile,
+      amplitude: number,
+      effectiveStartTimeMillis: number,
+      playSpeed: number
+    };
+    const layerResultPromises: Promise<LayerResult | null>[] = [];
     for (const controller of this.controllers) {
       if (controller.state) {
         for (const layer of controller.state.layers) {
           if (layer.state.type === 'playing') {
             const layerState = layer.state;
+            const meta = this.getFileMeta(layer.file);
             // Get the file hash, and add it to the layerPromises
-            layerPromises.push(
-              this.getFileHash(layer.file)
-                .then<BcastLayerState>(fileHash => ({
-                  fileHash,
+            layerResultPromises.push(
+              this.getTrackState(meta.id, meta.durationMillis)
+                .then<LayerResult>(state => ({
+                  file: state.state,
                   amplitude: 1,
                   effectiveStartTimeMillis: layerState.effectiveStartTimeMillis,
                   playSpeed: layerState.playSpeed
-                })));
+                }))
+                .catch(() => null)
+            );
           }
         }
       }
     }
+    const layerResults = filterNotNull(await Promise.all(layerResultPromises));
+    this.cueFileHashLookup.updateActiveObjects(layerResults.map(l => l.file));
     const layers: BcastLayerState[] = [];
-    for (const l of await Promise.all(layerPromises)) {
-      if (l) layers.push(l);
+    for (const l of layerResults) {
+      const hash = this.cueFileHashLookup.getHash(l.file);
+      if (!hash) {
+        console.error('Could not get hash for CueFile!');
+        continue;
+      }
+      layers.push({
+        fileHash: hash,
+        amplitude: l.amplitude,
+        effectiveStartTimeMillis: l.effectiveStartTimeMillis,
+        playSpeed: l.playSpeed
+      });
     }
-    return {layers};
-  }
-
-  private async sendStateToDownstreamConnection(connection: DownstreamConnection) {
-    connection.sendState(await this.getProtocolState());
+    this.lastState = {layers};
   }
 
   private async sendStateDownstream() {
-    const state = await this.getProtocolState();
-    for(const connection of this.downstreamConnections) {
-      connection.sendState(state);
+    await this.updateProtocolState();
+    for (const connection of this.downstreamConnections) {
+      connection.sendState(this.lastState);
     }
   }
 
