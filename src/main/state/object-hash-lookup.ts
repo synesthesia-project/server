@@ -40,7 +40,9 @@ export class ObjectHashLookup<T> {
   public updateActiveObjects(objects: T[]) {
     const newState = emptyState<T>();
     for (const obj of objects) {
-      const hash = this.hashObject(obj);
+      let hash = this.state.objToHash.get(obj);
+      if (!hash)
+        hash = this.hashObject(obj);
       newState.hashToObj.set(hash, obj);
       newState.objToHash.set(obj, hash);
     }

@@ -130,7 +130,7 @@ describe('ObjectHashLookup', function () {
 
     expect(lookup.getHash(a)).to.equal('05386f28d1614fecb1c7e329bd82417fb48dd452');
     expect(lookup.getHash(b)).to.equal('217e0aa280ea76871d5cfa05a015563a9be837b2');
-    expect(lookup.getHash(c)).to.equal('217e0aa280ea76871d5cfa05a015563a9be837b2');
+    expect(lookup.getHash(c)).to.equal('8ca201b5be4035e9d47d070f3cc7e5ccc014d3e9');
     expect(lookup.getObject('05386f28d1614fecb1c7e329bd82417fb48dd452') === a).to.be.true;
     expect(lookup.getObject('217e0aa280ea76871d5cfa05a015563a9be837b2') === b).to.be.true;
     expect(lookup.getObject('8ca201b5be4035e9d47d070f3cc7e5ccc014d3e9') === c).to.be.true;
