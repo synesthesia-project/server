@@ -259,7 +259,7 @@ export class ServerState {
     const meta = this.getFileMeta(file);
     await this.getTrackState(meta.id, meta.durationMillis);
 
-    // TODO
+    // TODO: put most of this logic in a utility class outside of this file
     return 'asdfg';
   }
 
