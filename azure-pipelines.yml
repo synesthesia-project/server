@@ -22,7 +22,7 @@ steps:
 - script: |
     yarn --cwd external/composer install
     git checkout external/composer/node_modules
-    yarn --cwd external/composer run build install
+    yarn --cwd external/composer run build
   displayName: 'build dependency: composer'
 
 - script: |
