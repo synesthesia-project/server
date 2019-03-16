@@ -16,19 +16,19 @@ steps:
 
 - script: |
     yarn --cwd external/composer/external/core install
-    gulp --gulpfile external/composer/external/core/gulpfile.js
+    yarn --cwd external/composer/external/core run build
   displayName: 'build dependency: core'
 
 - script: |
     yarn --cwd external/composer install
     git checkout external/composer/node_modules
-    gulp --gulpfile external/composer/gulpfile.js
+    yarn --cwd external/composer run build install
   displayName: 'build dependency: composer'
 
 - script: |
     yarn install
     git checkout node_modules
-    gulp
+    yarn run build
   displayName: 'build server'
 
 - script: |
