@@ -124,6 +124,8 @@ export class ServerState {
       case 'pause':
       case 'go-to-time':
         return mainSongAndController.controller.controller.sendRequest(request);
+      case 'play-speed':
+        return mainSongAndController.controller.controller.sendRequest(request);
       case 'file-action':
         return this.handleFileAction(request);
     }
