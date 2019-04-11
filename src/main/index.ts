@@ -1,6 +1,8 @@
 import { DEFAULT_SYNESTHESIA_PORT } from '@synesthesia-project/core/constants';
 
 import { Server } from './server';
+import * as s2 from './server';
+import * as s3 from './server';
 
 const dataDir = process.argv[2];
 
